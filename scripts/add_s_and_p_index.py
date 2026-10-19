@@ -1,49 +1,32 @@
-import os, sys, csv
-import math
-import pprint
-
-def roundup(var):
-	return float(format(var, '.6f'))
+#!/usr/bin/env python
+"""
+    Merge stock dataframe with S&P 500 index indicators on date.
+"""
+import os
+import sys
+import pandas as pd
 
 def main(dir_path, sp_index_file, output_dir):
-	files = os.listdir(dir_path)
+    os.makedirs(output_dir, exist_ok=True)
+    sp_df = pd.read_csv(sp_index_file)
+    sp_df['date'] = pd.to_datetime(sp_df['date']).dt.strftime('%Y-%m-%d')
+    
+    files = [f for f in os.listdir(dir_path) if f.endswith('.csv') and f != os.path.basename(sp_index_file)]
 
-	for file_name in files:
-		with open( os.path.join(dir_path, file_name), 'r') as textfile:
+    for file_name in files:
+        stock_path = os.path.join(dir_path, file_name)
+        stock_df = pd.read_csv(stock_path)
+        stock_df['date'] = pd.to_datetime(stock_df['date']).dt.strftime('%Y-%m-%d')
 
-			new_file = open(os.path.join(output_dir, file_name), 'w+')
+        merged = pd.merge(stock_df, sp_df, on='date', how='inner')
+        merged = merged.sort_values('date').reset_index(drop=True)
 
-			new_list = []
-			new_list.append(['symbol','date','open','high','low','close','volume','adj_close', 'prev_day_diff', '50_day_moving_avg', '10_day_volatility', 
-				's&p_index_open', 's&p_index_high', 's&p_index_low', 's&p_index_close', 's&p_index_volume', 's&p_index_adj_close'])
-
-			dict_mapping = {}
-
-			for count, row in enumerate(reversed(list(csv.reader(textfile)))):
-				if str(row[0])=="symbol":
-					break
-
-				date = str(row[1])
-				dict_mapping[date] = row
-
-			"""
-				Extend to Existing Key-Value in dict_mapping dictionary.
-			"""
-
-			with open(sp_index_file, 'r') as sp_index_fp:
-				for count2, row2 in enumerate(reversed(list(csv.reader(sp_index_fp)))):
-					if str(row2[0]) in dict_mapping:
-						dict_mapping[str(row2[0])].extend(row2[1:])
-
-			#pprint.pprint(dict_mapping, width=1)
-
-			for key in sorted(dict_mapping):
-				new_list.append(dict_mapping[key])
-			
-			writer = csv.writer(new_file)
-			writer.writerows(new_list)
-			new_file.close()
-		textfile.close()
+        out_path = os.path.join(output_dir, file_name)
+        merged.to_csv(out_path, index=False)
+        print(f"Merged {file_name} with S&P 500: {len(merged)} rows -> {out_path}")
 
 if __name__ == '__main__':
-	main(str(sys.argv[1]), str(sys.argv[2]), str(sys.argv[3]))
+    if len(sys.argv) < 4:
+        print("Usage: python add_s_and_p_index.py <stock-dir> <sp-index-file> <output-dir>")
+        sys.exit(1)
+    main(sys.argv[1], sys.argv[2], sys.argv[3])
